@@ -7,5 +7,5 @@ console.log('Process ID:', process.pid);
 console.log('Platform:', process.platform); 
 
 // Attach a custom property to global and log it
-global.myCustomVar = 'Hello, I am a global variable!'; 
+global.myCustomVar = 'Hello, global!'; 
 console.log('Custom global variable:', global.myCustomVar); 
