@@ -1,10 +1,16 @@
+global.user_id = null;
+global.users = [];
+global.tasks = [];
+
 const express = require("express");
 const app = express();
 
 const notFoundMiddleware = require("./middleware/not-found");
 const errorHandler = require("./middleware/error-handler");
+const userRouter = require("./routes/userRoutes");
+const { index, create, show, update, deleteTask } = require('./controllers/taskController');
 
-app.use(express.json());
+app.use(express.json({ limit: "1kb" }));
 
 app.use((req, res, next) => {
   console.log("Method:", req.method);
@@ -16,18 +22,17 @@ app.use((req, res, next) => {
 
 app.get("/", (req, res) => {
   res.send("Hello, World!");
-//  throw(new Error("something bad happened!"));
 });
 
-app.post("/testpost", (req, res) => {
-  console.log(req.body);
-  res.json({
-    message: "POST request received",
-    data: req.body,
-  });
-});
+app.use("/api/users", userRouter);
 
-app.use(notFoundMiddleware)
+app.get("/api/tasks", index);
+app.post("/api/tasks", create);
+app.get("/api/tasks/:id", show);
+app.patch("/api/tasks/:id", update);
+app.delete("/api/tasks/:id", deleteTask);
+
+app.use(notFoundMiddleware);
 app.use(errorHandler);
 
 const port = process.env.PORT || 3000;
