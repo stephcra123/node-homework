@@ -8,29 +8,26 @@ const app = express();
 const notFoundMiddleware = require("./middleware/not-found");
 const errorHandler = require("./middleware/error-handler");
 const userRouter = require("./routes/userRoutes");
-const { index, create, show, update, deleteTask } = require('./controllers/taskController');
+const authMiddleware = require("./middleware/auth");
+const taskRouter = require("./routes/taskRoutes");
 
 app.use(express.json({ limit: "1kb" }));
 
 app.use((req, res, next) => {
+  console.log("----------------------");
   console.log("Method:", req.method);
   console.log("Path:", req.path);
   console.log("Query:", req.query);
   console.log("----------------------");
-  next(); 
+  next();
 });
 
 app.get("/", (req, res) => {
-  res.send("Hello, World!");
+    res.json({ message: "Hello, World!" });
 });
 
 app.use("/api/users", userRouter);
-
-app.get("/api/tasks", index);
-app.post("/api/tasks", create);
-app.get("/api/tasks/:id", show);
-app.patch("/api/tasks/:id", update);
-app.delete("/api/tasks/:id", deleteTask);
+app.use("/api/tasks", authMiddleware, taskRouter);
 
 app.use(notFoundMiddleware);
 app.use(errorHandler);
