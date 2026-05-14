@@ -1,6 +1,5 @@
 global.user_id = null;
 global.users = [];
-global.tasks = [];
 
 const express = require("express");
 const app = express();
@@ -10,6 +9,7 @@ const errorHandler = require("./middleware/error-handler");
 const userRouter = require("./routes/userRoutes");
 const authMiddleware = require("./middleware/auth");
 const taskRouter = require("./routes/taskRoutes");
+const pool = require("./db/pg-pool");
 
 app.use(express.json({ limit: "1kb" }));
 
@@ -20,6 +20,15 @@ app.use((req, res, next) => {
   console.log("Query:", req.query);
   console.log("----------------------");
   next();
+});
+
+app.get("/health", async (req, res) => {
+  try {
+    await pool.query("SELECT 1");
+    res.json({ status: "ok", db: "connected" });
+  } catch (err) {
+    res.status(500).json({ message: `db not connected, error: ${err.message}` });
+  }
 });
 
 app.get("/", (req, res) => {
@@ -55,6 +64,7 @@ async function shutdown(code = 0) {
     await new Promise(resolve => server.close(resolve));
     console.log('HTTP server closed.');
     // If you have DB connections, close them here
+    await pool.end();
   } catch (err) {
     console.error('Error during shutdown:', err);
     code = 1;
