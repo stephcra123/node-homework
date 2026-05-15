@@ -1,6 +1,3 @@
-global.user_id = null;
-global.users = [];
-
 const express = require("express");
 const app = express();
 
