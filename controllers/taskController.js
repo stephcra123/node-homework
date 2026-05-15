@@ -27,7 +27,7 @@ const create = async (req, res) => {
   if (error) {
     return res.status(StatusCodes.BAD_REQUEST).json({ message: error.message });
   }
-  const isCompleted = value.is_completed ?? false;
+  const isCompleted = value.isCompleted ?? false;
   const task = await pool.query(
     `INSERT INTO tasks (title, is_completed, user_id) 
      VALUES ($1, $2, $3) RETURNING id, title, is_completed`,
