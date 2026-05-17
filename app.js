@@ -1,3 +1,7 @@
+global.user_id = null;
+global.users = [];
+global.tasks = [];
+
 const express = require("express");
 const app = express();
 
@@ -7,6 +11,7 @@ const userRouter = require("./routes/userRoutes");
 const authMiddleware = require("./middleware/auth");
 const taskRouter = require("./routes/taskRoutes");
 const pool = require("./db/pg-pool");
+const prisma = require("./db/prisma");
 
 app.use(express.json({ limit: "1kb" }));
 
@@ -19,29 +24,37 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get("/health", async (req, res) => {
+// Health check
+app.get('/health', async (req, res) => {
   try {
-    await pool.query("SELECT 1");
-    res.json({ status: "ok", db: "connected" });
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok', db: 'connected' });
   } catch (err) {
-    res.status(500).json({ message: `db not connected, error: ${err.message}` });
+    res.status(500).json({ status: 'error', db: 'not connected', error: err.message });
   }
 });
 
 app.get("/", (req, res) => {
-    res.json({ message: "Hello, World!" });
+  res.json({ message: "Hello, World!" });
 });
 
 app.use("/api/users", userRouter);
 app.use("/api/tasks", authMiddleware, taskRouter);
 
 app.use(notFoundMiddleware);
-app.use(errorHandler);
+
+// Error handler
+app.use((err, req, res, next) => {
+  if (err.name === "PrismaClientInitializationError") {
+    console.error("Couldn't connect to the database. Is it running?");
+  }
+  errorHandler(err, req, res, next);
+});
 
 const port = process.env.PORT || 3000;
 const server = app.listen(port, () =>
-      console.log(`Server is listening on port ${port}...`),
-    );
+  console.log(`Server is listening on port ${port}...`)
+);
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
@@ -60,8 +73,9 @@ async function shutdown(code = 0) {
   try {
     await new Promise(resolve => server.close(resolve));
     console.log('HTTP server closed.');
-    // If you have DB connections, close them here
     await pool.end();
+    await prisma.$disconnect();
+    console.log("Prisma disconnected");
   } catch (err) {
     console.error('Error during shutdown:', err);
     code = 1;
@@ -71,8 +85,8 @@ async function shutdown(code = 0) {
   }
 }
 
-process.on('SIGINT', () => shutdown(0));  // ctrl+c
-process.on('SIGTERM', () => shutdown(0)); // e.g. `docker stop`
+process.on('SIGINT', () => shutdown(0));
+process.on('SIGTERM', () => shutdown(0));
 process.on('uncaughtException', (err) => {
   console.error('Uncaught exception:', err);
   shutdown(1);
@@ -80,6 +94,6 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
   console.error('Unhandled rejection:', reason);
   shutdown(1);
-});    
+});
 
-module.exports = { app, server} ;
+module.exports = { app, server };
