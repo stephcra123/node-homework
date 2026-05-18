@@ -3,7 +3,7 @@ const { userSchema } = require('../validation/userSchema');
 const crypto = require("crypto");
 const util = require("util");
 const scrypt = util.promisify(crypto.scrypt);
-const pool = require("../db/pg-pool");
+const prisma = require("../db/prisma");
 
 async function hashPassword(password) {
   const salt = crypto.randomBytes(16).toString("hex");
@@ -26,43 +26,44 @@ const register = async (req, res, next) => {
       details: error.details,
     });
   }
-  value.hashed_password = await hashPassword(value.password);
+
+   const hashedPassword = await hashPassword(value.password);
+  const { name, email } = value;
   let user = null;
   try {
-    user = await pool.query(
-      `INSERT INTO users (email, name, hashed_password) 
-       VALUES ($1, $2, $3) RETURNING id, email, name`,
-      [value.email, value.name, value.hashed_password]
-    );
-  } catch (e) {
-    if (e.code === "23505") {
+    user = await prisma.user.create({
+      data: { name, email, hashedPassword },
+      select: { name: true, email: true, id: true }
+    });
+  } catch (err) {
+    if (err.name === "PrismaClientKnownRequestError" && err.code === "P2002") {
       return res.status(StatusCodes.BAD_REQUEST).json({
         message: "Email already registered"
       });
+    } else {
+      return next(err);
     }
-    return next(e);
   }
-  global.user_id = user.rows[0].id;
+  global.user_id = user.id;
   res.status(StatusCodes.CREATED).json({
-    name: user.rows[0].name,
-    email: user.rows[0].email
+    name: user.name,
+    email: user.email
   });
 };
-
 const logon = async (req, res) => {
-  const { email, password } = req.body;
-  const result = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
-  if (result.rows.length === 0) { 
+  let { email, password } = req.body;
+  email = email.toLowerCase();
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) {
     return res.status(StatusCodes.UNAUTHORIZED).json({ message: "Authentication Failed" });
   }
-  const isMatch = await comparePassword(password, result.rows[0].hashed_password);
+  const isMatch = await comparePassword(password, user.hashedPassword);
   if (!isMatch) {
     return res.status(StatusCodes.UNAUTHORIZED).json({ message: "Authentication Failed" });
   }
-  global.user_id = result.rows[0].id;
-  res.status(StatusCodes.OK).json({ name: result.rows[0].name, email: result.rows[0].email });
+  global.user_id = user.id;
+  res.status(StatusCodes.OK).json({ name: user.name, email: user.email });
 };
-
 const logoff = (req, res) => {
   global.user_id = null;
   res.status(StatusCodes.OK).json({ message: "Logged off" });
