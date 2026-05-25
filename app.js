@@ -12,6 +12,8 @@ const authMiddleware = require("./middleware/auth");
 const taskRouter = require("./routes/taskRoutes");
 const pool = require("./db/pg-pool");
 const prisma = require("./db/prisma");
+const analyticsRouter = require("./routes/analyticsRoutes");
+app.use("/api/analytics", authMiddleware, analyticsRouter);
 
 app.use(express.json({ limit: "1kb" }));
 
