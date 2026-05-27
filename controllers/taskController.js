@@ -21,7 +21,7 @@ const index = async (req, res, next) => {
     if (limit > 100) limit = 100;
     const skip = (page - 1) * limit;
 
-    const whereClause = { userId: global.user_id };
+    const whereClause = { userId: req.user.id };
     if (req.query.find) {
       whereClause.title = {
         contains: req.query.find,
@@ -74,7 +74,7 @@ const create = async (req, res, next) => {
         title: value.title,
         isCompleted: value.isCompleted ?? false,
         priority: value.priority ?? "medium",
-        userId: global.user_id
+        userId: req.user.id
       },
       select: { id: true, title: true, isCompleted: true, priority: true, createdAt: true }
     });
@@ -89,7 +89,7 @@ const show = async (req, res, next) => {
     const task = await prisma.task.findUnique({
       where: {
         id: parseInt(req.params.id),
-        userId: global.user_id
+        userId: req.user.id
       },
       select: { id: true, title: true, isCompleted: true, priority: true, createdAt: true, User: {
           select: { name: true, email: true }
@@ -117,7 +117,7 @@ const update = async (req, res, next) => {
   try {
     const task = await prisma.task.update({
       data: value,
-      where: { id, userId: global.user_id },
+      where: { id, userId: req.user.id },
       select: { id: true, title: true, isCompleted: true, priority: true, createdAt: true }
     });
     res.status(StatusCodes.OK).json(task);
@@ -134,7 +134,7 @@ const deleteTask = async (req, res, next) => {
   const id = parseInt(req.params.id);
   try {
     const task = await prisma.task.delete({
-      where: { id, userId: global.user_id },
+      where: { id, userId: req.user.id },
       select: { id: true, title: true, isCompleted: true, priority: true, createdAt: true }
     });
     res.status(StatusCodes.OK).json(task);
@@ -166,7 +166,7 @@ const bulkCreate = async (req, res, next) => {
       title: value.title,
       isCompleted: value.isCompleted || false,
       priority: value.priority || 'medium',
-      userId: global.user_id
+      userId: req.user.id
     });
   }
   try {

@@ -1,21 +1,22 @@
-global.user_id = null;
-global.users = [];
-global.tasks = [];
-
 const express = require("express");
 const app = express();
+const cookieParser = require("cookie-parser");
+const helmet = require("helmet");
 
+const rateLimiter = require("express-rate-limit");
 const notFoundMiddleware = require("./middleware/not-found");
 const errorHandler = require("./middleware/error-handler");
 const userRouter = require("./routes/userRoutes");
-const authMiddleware = require("./middleware/auth");
+const jwtMiddleware = require("./middleware/jwtMiddleware");
 const taskRouter = require("./routes/taskRoutes");
 const pool = require("./db/pg-pool");
 const prisma = require("./db/prisma");
 const analyticsRouter = require("./routes/analyticsRoutes");
-app.use("/api/analytics", authMiddleware, analyticsRouter);
 
+app.use(cookieParser()); 
 app.use(express.json({ limit: "1kb" }));
+
+app.set("trust proxy", 1);
 
 app.use((req, res, next) => {
   console.log("----------------------");
@@ -26,7 +27,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check
 app.get('/health', async (req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
@@ -40,12 +40,23 @@ app.get("/", (req, res) => {
   res.json({ message: "Hello, World!" });
 });
 
+app.use(
+  rateLimiter({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+  })
+);
+
+app.use(helmet());
+app.use(cookieParser());
+app.use(express.json({ limit: "1kb" }));
+
 app.use("/api/users", userRouter);
-app.use("/api/tasks", authMiddleware, taskRouter);
+app.use("/api/tasks", jwtMiddleware, taskRouter);
+app.use("/api/analytics", jwtMiddleware, analyticsRouter);
 
 app.use(notFoundMiddleware);
 
-// Error handler
 app.use((err, req, res, next) => {
   if (err.name === "PrismaClientInitializationError") {
     console.error("Couldn't connect to the database. Is it running?");
