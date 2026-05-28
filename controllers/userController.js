@@ -4,6 +4,8 @@ const crypto = require("crypto");
 const util = require("util");
 const scrypt = util.promisify(crypto.scrypt);
 const prisma = require("../db/prisma");
+const { randomUUID } = require("crypto");
+const jwt = require("jsonwebtoken");
 
 async function hashPassword(password) {
   const salt = crypto.randomBytes(16).toString("hex");
@@ -17,6 +19,19 @@ async function comparePassword(inputPassword, storedHash) {
   const derivedKey = await scrypt(inputPassword, salt, 64);
   return crypto.timingSafeEqual(keyBuffer, derivedKey);
 }
+const cookieFlags = (req) => {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "Strict",
+  };
+};
+const setJwtCookie = (req, res, user) => {
+  const payload = { id: user.id, csrfToken: randomUUID() };
+  const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "1h" });
+  res.cookie("jwt", token, { ...cookieFlags(req), maxAge: 3600000 });
+  return payload.csrfToken;
+};
 
 const register = async (req, res, next) => {
   if (!req.body) req.body = {};
@@ -50,13 +65,18 @@ const register = async (req, res, next) => {
       });
       return { user: newUser, welcomeTasks };
     });
-    global.user_id = result.user.id;
+    
+const csrfToken = setJwtCookie(req, res, result.user);  
     res.status(StatusCodes.CREATED).json({
-      user: result.user,
+      user: result.user, 
+      name: result.user.name,
+      email: result.user.email,
+      csrfToken,                                            
       welcomeTasks: result.welcomeTasks,
       transactionStatus: "success"
     });
   } catch (err) {
+    console.error("REGISTER ERROR:", err);
     if (err.code === "P2002") {
       return res.status(StatusCodes.BAD_REQUEST).json({ error: "Email already registered" });
     } else {
@@ -84,12 +104,12 @@ const logon = async (req, res) => {
   if (!isMatch) {
     return res.status(StatusCodes.UNAUTHORIZED).json({ message: "Authentication Failed" });
   }
-  global.user_id = user.id;
-  res.status(StatusCodes.OK).json({ name: user.name, email: user.email });
+  const csrfToken = setJwtCookie(req, res, user);  
+  res.status(StatusCodes.OK).json({ name: user.name, email: user.email, csrfToken });
 };
 
 const logoff = (req, res) => {
-  global.user_id = null;
+  res.clearCookie("jwt", cookieFlags(req));  
   res.status(StatusCodes.OK).json({ message: "Logged off" });
 };
 
