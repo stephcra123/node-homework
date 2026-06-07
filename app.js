@@ -25,12 +25,24 @@ app.use((req, res, next) => {
   console.log("----------------------");
   console.log("Method:", req.method);
   console.log("Path:", req.path);
-  console.log("Query:", req.query);
+  console.log("Query:", req.url);
   console.log("----------------------");
   next();
 });
 app.use(cookieParser()); 
 app.use(express.json({ limit: "1kb" }));
+
+app.use((req, res, next) => {
+  if (req.query) {
+    Object.defineProperty(req, 'query', {
+      value: req.query,
+      writable: true,
+      configurable: true,
+      enumerable: true
+    });
+  }
+  next();
+});
 app.use(xss());
 
 app.get('/health', async (req, res) => {
