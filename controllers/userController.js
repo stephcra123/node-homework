@@ -23,7 +23,7 @@ const cookieFlags = (req) => {
   return {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "Strict",
+    sameSite: process.env.NODE_ENV === "production" ? "Strict" : "None",
   };
 };
 const setJwtCookie = (req, res, user) => {
@@ -109,7 +109,7 @@ const logon = async (req, res) => {
 };
 
 const logoff = (req, res) => {
-  res.clearCookie("jwt", cookieFlags(req));  
+  res.clearCookie("jwt", cookieFlags(req));
   res.status(StatusCodes.OK).json({ message: "Logged off" });
 };
 
