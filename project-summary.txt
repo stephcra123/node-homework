@@ -1,0 +1,4 @@
+echo "Render deployment URL: https://node-homework-bo1b.onrender.com" > project-summary.txt
+git add project-summary.txt
+git commit -m "add project-summary.txt with render URL"
+git push origin assignment10
