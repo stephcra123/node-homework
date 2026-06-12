@@ -21,7 +21,7 @@ const index = async (req, res, next) => {
     if (limit > 100) limit = 100;
     const skip = (page - 1) * limit;
 
-    const whereClause = { userId: req.user.id };
+    const whereClause = { userId: req.user.id, trash: false };
     if (req.query.find) {
       whereClause.title = {
         contains: req.query.find,
@@ -47,10 +47,9 @@ const index = async (req, res, next) => {
     });
     const totalTasks = await prisma.task.count({ where: whereClause });
     if (totalTasks === 0) {
-    return res.status(StatusCodes.NOT_FOUND).json({ message: "No tasks found" });
+      return res.status(StatusCodes.NOT_FOUND).json({ message: "No tasks found" });
     }
 
-    
     const pagination = {
       page,
       limit,
@@ -93,11 +92,19 @@ const show = async (req, res, next) => {
     const task = await prisma.task.findUnique({
       where: {
         id: parseInt(req.params.id),
-        userId: req.user.id
+        userId: req.user.id,
+        trash: false,
       },
-      select: { id: true, title: true, isCompleted: true, priority: true, createdAt: true, User: {
+      select: {
+        id: true,
+        title: true,
+        isCompleted: true,
+        priority: true,
+        createdAt: true,
+        User: {
           select: { name: true, email: true }
-        }}
+        }
+      }
     });
     if (!task) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: "That task was not found" });
@@ -121,7 +128,7 @@ const update = async (req, res, next) => {
   try {
     const task = await prisma.task.update({
       data: value,
-      where: { id, userId: req.user.id },
+      where: { id, userId: req.user.id, trash: false },
       select: { id: true, title: true, isCompleted: true, priority: true, createdAt: true }
     });
     res.status(StatusCodes.OK).json(task);
@@ -137,8 +144,9 @@ const update = async (req, res, next) => {
 const deleteTask = async (req, res, next) => {
   const id = parseInt(req.params.id);
   try {
-    const task = await prisma.task.delete({
-      where: { id, userId: req.user.id },
+    const task = await prisma.task.update({
+      where: { id, userId: req.user.id, trash: false },
+      data: { trash: true },
       select: { id: true, title: true, isCompleted: true, priority: true, createdAt: true }
     });
     res.status(StatusCodes.OK).json(task);
@@ -150,6 +158,7 @@ const deleteTask = async (req, res, next) => {
     }
   }
 };
+
 const bulkCreate = async (req, res, next) => {
   const { tasks } = req.body;
   if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
@@ -188,4 +197,55 @@ const bulkCreate = async (req, res, next) => {
   }
 };
 
-module.exports = { index, create, show, update, deleteTask, bulkCreate };
+const getTrashed = async (req, res, next) => {
+  try {
+    const tasks = await prisma.task.findMany({
+      where: { userId: req.user.id, trash: true },
+      select: {
+        id: true,
+        title: true,
+        isCompleted: true,
+        priority: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    if (tasks.length === 0) {
+      return res.status(StatusCodes.NOT_FOUND).json({ message: "No trashed tasks found." });
+    }
+    res.status(StatusCodes.OK).json({ tasks });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+const emptyTrash = async (req, res, next) => {
+  try {
+    const result = await prisma.task.deleteMany({
+      where: { userId: req.user.id, trash: true }
+    });
+    res.status(StatusCodes.OK).json({ message: `${result.count} task(s) permanently deleted.` });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+const restoreTask = async (req, res, next) => {
+  const id = parseInt(req.params.id);
+  try {
+    const task = await prisma.task.update({
+      where: { id, userId: req.user.id, trash: true },
+      data: { trash: false },
+      select: { id: true, title: true, isCompleted: true, priority: true, createdAt: true }
+    });
+    res.status(StatusCodes.OK).json(task);
+  } catch (err) {
+    if (err.code === "P2025") {
+      return res.status(StatusCodes.NOT_FOUND).json({ message: "The task was not found in trash." });
+    } else {
+      return next(err);
+    }
+  }
+};
+
+module.exports = { index, create, show, update, deleteTask, bulkCreate, getTrashed, emptyTrash, restoreTask };
